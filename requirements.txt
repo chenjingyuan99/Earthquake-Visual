@@ -1,0 +1,10 @@
+Flask
+pandas
+pyodbc
+redis==4.1.4
+azure-storage-blob
+Werkzeug
+gunicorn
+timezonefinder
+pytz
+

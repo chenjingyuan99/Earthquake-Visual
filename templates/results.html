@@ -1,0 +1,79 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Results - Earthquake Data Analysis</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <div class="container">
+        <h1>{{ query_type }} Results</h1>
+        
+        <!-- Performance Metrics -->
+        <div class="metrics">
+            <div class="metric">
+                <h3>Execution Time</h3>
+                <p>{{ "%.4f"|format(execution_time) }} seconds</p>
+            </div>
+            <div class="metric">
+                <h3>Total Results</h3>
+                <p>{{ total_queries }}</p>
+            </div>
+            <div class="metric">
+                <h3>Cache Hits</h3>
+                <p>{{ cache_hits }}</p>
+            </div>
+            <div class="metric">
+                <h3>Hit Rate</h3>
+                <p>{{ "%.2f"|format(hit_rate) }}%</p>
+            </div>
+            <div class="metric">
+                <h3>Redis Used</h3>
+                <p>{{ "Yes" if used_redis else "No" }}</p>
+            </div>
+        </div>
+        
+        <!-- Results Table -->
+        <div class="results-section">
+            <h2>Earthquake Data (Showing first 50 results)</h2>
+            <div class="table-container">
+                <table class="results-table">
+                    <thead>
+                        <tr>
+                            <th>ID</th>
+                            <th>Time</th>
+                            <th>Latitude</th>
+                            <th>Longitude</th>
+                            <th>Depth (km)</th>
+                            <th>Magnitude</th>
+                            <th>Location</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for result in results[:50] %}
+                        <tr>
+                            <td>{{ result.id }}</td>
+                            <td>{{ result.time }}</td>
+                            <td>{{ "%.4f"|format(result.latitude) }}</td>
+                            <td>{{ "%.4f"|format(result.longitude) }}</td>
+                            <td>{{ "%.2f"|format(result.depth) if result.depth else 'N/A' }}</td>
+                            <td>{{ "%.2f"|format(result.magnitude) if result.magnitude else 'N/A' }}</td>
+                            <td>{{ result.place }}</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+            
+            {% if results|length > 50 %}
+            <p class="note">Showing first 50 of {{ results|length }} total results.</p>
+            {% endif %}
+        </div>
+        
+        <div class="actions">
+            <a href="{{ url_for('index') }}" class="btn btn-primary">Back to Search</a>
+        </div>
+    </div>
+</body>
+</html>

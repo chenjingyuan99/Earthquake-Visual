@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Query Earthquake Data</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">🌍 Homepage</a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="{{ url_for('upload_file') }}">Upload Data</a>
+                <a class="nav-link active" href="{{ url_for('query_page') }}">Query Data</a>
+                <a class="nav-link" href="{{ url_for('visualize_page') }}">📊 Visualize</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h2>🔍 Query Earthquake Data</h2>
+        
+        <!-- Random Queries Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>🎲 Random Queries</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="numQueries" class="form-label">Number of Random Queries (max 1000):</label>
+                        <input type="number" class="form-control" id="numQueries" min="1" max="1000" value="10">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-primary me-2" onclick="executeRandomQueries(false)">
+                        🔍 Search (No Cache)
+                    </button>
+                    <button class="btn btn-success" onclick="executeRandomQueries(true)">
+                        ⚡ Redis Search
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Place Search Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>🌐 Search by Place</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <label for="placeSearch" class="form-label">Place substring (e.g., "CA", "Japan"):</label>
+                        <input type="text" class="form-control" id="placeSearch" placeholder="Enter place substring">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-primary me-2" onclick="searchByPlace(false)">
+                        🔍 Search (No Cache)
+                    </button>
+                    <button class="btn btn-success" onclick="searchByPlace(true)">
+                        ⚡ Redis Search
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Location Search Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>📍 Search by Location</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-3">
+                        <label for="latitude" class="form-label">Latitude:</label>
+                        <input type="number" class="form-control" id="latitude" step="0.0001" placeholder="e.g., 34.0522">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="longitude" class="form-label">Longitude:</label>
+                        <input type="number" class="form-control" id="longitude" step="0.0001" placeholder="e.g., -118.2437">
+                    </div>
+                    <div class="col-md-3">
+                        <label for="radius" class="form-label">Radius (km, max 100):</label>
+                        <input type="number" class="form-control" id="radius" min="1" max="100" value="50">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-primary me-2" onclick="searchByLocation(false)">
+                        🔍 Search (No Cache)
+                    </button>
+                    <button class="btn btn-success" onclick="searchByLocation(true)">
+                        ⚡ Redis Search
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Time Range Search Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>📅 Search by Time Range</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="startDate" class="form-label">Start Date:</label>
+                        <input type="datetime-local" class="form-control" id="startDate">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="endDate" class="form-label">End Date:</label>
+                        <input type="datetime-local" class="form-control" id="endDate">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-primary me-2" onclick="searchByTimeRange(false)">
+                        🔍 Search (No Cache)
+                    </button>
+                    <button class="btn btn-success" onclick="searchByTimeRange(true)">
+                        ⚡ Redis Search
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Magnitude Search Section -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>📊 Search by Magnitude</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-4">
+                        <label for="minMagnitude" class="form-label">Minimum Magnitude:</label>
+                        <input type="number" class="form-control" id="minMagnitude" step="0.1" min="0" max="10" value="0">
+                    </div>
+                    <div class="col-md-4">
+                        <label for="maxMagnitude" class="form-label">Maximum Magnitude:</label>
+                        <input type="number" class="form-control" id="maxMagnitude" step="0.1" min="0" max="10" value="10">
+                    </div>
+                </div>
+                <div class="mt-3">
+                    <button class="btn btn-primary me-2" onclick="searchByMagnitude(false)">
+                        🔍 Search (No Cache)
+                    </button>
+                    <button class="btn btn-success" onclick="searchByMagnitude(true)">
+                        ⚡ Redis Search
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="card" id="resultsCard" style="display: none;">
+            <div class="card-header">
+                <h4>📊 Query Results</h4>
+            </div>
+            <div class="card-body">
+                <div id="performanceMetrics" class="alert alert-info mb-3"></div>
+                <div class="table-responsive">
+                    <table class="table table-striped" id="resultsTable">
+                        <thead>
+                            <tr>
+                                <th>ID</th>
+                                <th>Time</th>
+                                <th>Latitude</th>
+                                <th>Longitude</th>
+                                <th>Depth</th>
+                                <th>Magnitude</th>
+                                <th>Place</th>
+                                <th>Distance (km)</th>
+                            </tr>
+                        </thead>
+                        <tbody id="resultsBody">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        function showLoading(button) {
+            button.disabled = true;
+            button.innerHTML = '<span class="spinner-border spinner-border-sm" role="status"></span> Searching...';
+        }
+
+        function hideLoading(button, originalText) {
+            button.disabled = false;
+            button.innerHTML = originalText;
+        }
+
+        function displayResults(data, queryType) {
+            const resultsCard = document.getElementById('resultsCard');
+            const performanceMetrics = document.getElementById('performanceMetrics');
+            const resultsBody = document.getElementById('resultsBody');
+            
+            // Show performance metrics
+            let metricsHtml = `
+                <h5>Performance Metrics</h5>
+                <p><strong>Query Type:</strong> ${queryType}</p>
+                <p><strong>Execution Time:</strong> ${data.execution_time} seconds</p>
+                <p><strong>Results Count:</strong> ${data.results.length}</p>
+            `;
+            
+            if (data.hasOwnProperty('cache_hit')) {
+                metricsHtml += `<p><strong>Cache Hit:</strong> ${data.cache_hit ? 'Yes' : 'No'}</p>`;
+            }
+            
+            if (data.hasOwnProperty('hit_rate')) {
+                metricsHtml += `<p><strong>Cache Hit Rate:</strong> ${data.hit_rate}%</p>`;
+            }
+            
+            if (data.hasOwnProperty('total_queries')) {
+                metricsHtml += `<p><strong>Total Queries:</strong> ${data.total_queries}</p>`;
+            }
+            
+            performanceMetrics.innerHTML = metricsHtml;
+            
+            // Show results table
+            resultsBody.innerHTML = '';
+            data.results.forEach(result => {
+                const row = resultsBody.insertRow();
+                row.insertCell(0).textContent = result.id || '';
+                row.insertCell(1).textContent = result.time ? new Date(result.time).toLocaleString() : '';
+                row.insertCell(2).textContent = result.latitude || '';
+                row.insertCell(3).textContent = result.longitude || '';
+                row.insertCell(4).textContent = result.depth || '';
+                row.insertCell(5).textContent = result.magnitude || '';
+                row.insertCell(6).textContent = result.place || '';
+                row.insertCell(7).textContent = result.distance_km || '';
+            });
+            
+            resultsCard.style.display = 'block';
+            resultsCard.scrollIntoView({ behavior: 'smooth' });
+        }
+
+        async function executeRandomQueries(useRedis) {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            showLoading(button);
+            
+            const numQueries = document.getElementById('numQueries').value;
+            
+            try {
+                const response = await fetch('/api/random_queries', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        num_queries: numQueries,
+                        use_redis: useRedis
+                    })
+                });
+                
+                const data = await response.json();
+                displayResults(data, `Random Queries (${useRedis ? 'Redis' : 'No Cache'})`);
+            } catch (error) {
+                alert('Error executing query: ' + error.message);
+            } finally {
+                hideLoading(button, originalText);
+            }
+        }
+
+        async function searchByPlace(useRedis) {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            showLoading(button);
+            
+            const placeSubstring = document.getElementById('placeSearch').value;
+            
+            if (!placeSubstring) {
+                alert('Please enter a place substring');
+                hideLoading(button, originalText);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/place_search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        place_substring: placeSubstring,
+                        use_redis: useRedis
+                    })
+                });
+                
+                const data = await response.json();
+                displayResults(data, `Place Search: "${placeSubstring}" (${useRedis ? 'Redis' : 'No Cache'})`);
+            } catch (error) {
+                alert('Error executing query: ' + error.message);
+            } finally {
+                hideLoading(button, originalText);
+            }
+        }
+
+        async function searchByLocation(useRedis) {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            showLoading(button);
+            
+            const latitude = document.getElementById('latitude').value;
+            const longitude = document.getElementById('longitude').value;
+            const radius = document.getElementById('radius').value;
+            
+            if (!latitude || !longitude) {
+                alert('Please enter latitude and longitude');
+                hideLoading(button, originalText);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/location_search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        latitude: parseFloat(latitude),
+                        longitude: parseFloat(longitude),
+                        radius_km: parseFloat(radius),
+                        use_redis: useRedis
+                    })
+                });
+                
+                const data = await response.json();
+                displayResults(data, `Location Search: ${latitude}, ${longitude} (${radius}km) (${useRedis ? 'Redis' : 'No Cache'})`);
+            } catch (error) {
+                alert('Error executing query: ' + error.message);
+            } finally {
+                hideLoading(button, originalText);
+            }
+        }
+
+        async function searchByTimeRange(useRedis) {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            showLoading(button);
+            
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            
+            if (!startDate || !endDate) {
+                alert('Please enter start and end dates');
+                hideLoading(button, originalText);
+                return;
+            }
+            
+            try {
+                const response = await fetch('/api/time_range_search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        start_date: startDate,
+                        end_date: endDate,
+                        use_redis: useRedis
+                    })
+                });
+                
+                const data = await response.json();
+                displayResults(data, `Time Range Search: ${startDate} to ${endDate} (${useRedis ? 'Redis' : 'No Cache'})`);
+            } catch (error) {
+                alert('Error executing query: ' + error.message);
+            } finally {
+                hideLoading(button, originalText);
+            }
+        }
+
+        async function searchByMagnitude(useRedis) {
+            const button = event.target;
+            const originalText = button.innerHTML;
+            showLoading(button);
+            
+            const minMagnitude = document.getElementById('minMagnitude').value;
+            const maxMagnitude = document.getElementById('maxMagnitude').value;
+            
+            try {
+                const response = await fetch('/api/magnitude_search', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        min_magnitude: parseFloat(minMagnitude),
+                        max_magnitude: parseFloat(maxMagnitude),
+                        use_redis: useRedis
+                    })
+                });
+                
+                const data = await response.json();
+                displayResults(data, `Magnitude Search: ${minMagnitude} to ${maxMagnitude} (${useRedis ? 'Redis' : 'No Cache'})`);
+            } catch (error) {
+                alert('Error executing query: ' + error.message);
+            } finally {
+                hideLoading(button, originalText);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,930 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Earthquake Data Visualization</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <!-- Add Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <!-- Leaflet MarkerCluster CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- D3.js -->
+    <script src="https://d3js.org/d3.v7.min.js"></script>
+    <!-- Leaflet JavaScript -->
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+    <!-- Leaflet MarkerCluster JavaScript -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <!-- Leaflet Heat Plugin -->
+    <script src="https://unpkg.com/leaflet.heat@0.2.0/dist/leaflet-heat.js"></script>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+        <div class="container">
+            <a class="navbar-brand" href="{{ url_for('index') }}">🌍 Homepage</a>
+            <div class="navbar-nav">
+                <a class="nav-link" href="{{ url_for('upload_file') }}">Upload Data</a>
+                <a class="nav-link" href="{{ url_for('query_page') }}">Query Data</a>
+                <a class="nav-link active" href="{{ url_for('visualize_page') }}">📊 Visualize</a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <h2>📊 Earthquake Data Visualization</h2>
+        
+        <!-- Control Panel -->
+        <div class="card mb-4">
+            <div class="card-header">
+                <h4>🎛️ Visualization Controls</h4>
+            </div>
+            <div class="card-body">
+                <div class="row">
+                    <div class="col-md-6">
+                        <div class="form-check">
+                            <input class="form-check-input" type="checkbox" id="useRedisCache" checked>
+                            <label class="form-check-label" for="useRedisCache">
+                                ⚡ Use Redis Cache
+                            </label>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <button class="btn btn-secondary btn-sm" onclick="refreshAllCharts()">
+                            🔄 Refresh All Charts
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+    <div class="row">
+            <!-- Interactive World Earthquake Map -->
+            <div class="col-md-12 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>🗺️ Interactive World Earthquake Map (Drag to see details)</h5>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-primary" onclick="loadLeafletMap()" id="allMagBtn">
+                                🌍 All Magnitudes
+                            </button>
+                            <button class="btn btn-danger" onclick="loadLeafletMap(5)" id="mag5Btn">
+                                🔥 Magnitude 5+
+                            </button>
+                            <button class="btn btn-warning" onclick="loadLeafletMap(7)" id="mag7Btn">
+                                ⚠️ Magnitude 7+
+                            </button>
+                            <button class="btn btn-secondary btn-sm" onclick="clearEarthquakeMarkers()">
+                                🗑️ Clear Map
+                            </button>
+                        </div>
+                        <div class="mt-2">
+                            <small class="text-muted" id="leafletMapStats"></small>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <!-- Leaflet Map Container -->
+                        <div id="leafletMap" style="height: 500px; width: 100%; border-radius: 8px;"></div>
+                        
+                        <!-- Map Controls -->
+                        <div class="mt-3">
+                            <div class="row">
+                                <div class="col-md-8">
+                                    <div class="legend d-flex justify-content-start flex-wrap">
+                                        <span class="legend-item me-3 mb-2">
+                                            <span class="legend-marker" style="background-color: #00ff00; width: 12px; height: 12px; display: inline-block; border-radius: 50%; margin-right: 5px; border: 1px solid #333;"></span>
+                                            <small>Magnitude 0-3</small>
+                                        </span>
+                                        <span class="legend-item me-3 mb-2">
+                                            <span class="legend-marker" style="background-color: #ffff00; width: 14px; height: 14px; display: inline-block; border-radius: 50%; margin-right: 5px; border: 1px solid #333;"></span>
+                                            <small>Magnitude 3-5</small>
+                                        </span>
+                                        <span class="legend-item me-3 mb-2">
+                                            <span class="legend-marker" style="background-color: #ff8800; width: 16px; height: 16px; display: inline-block; border-radius: 50%; margin-right: 5px; border: 1px solid #333;"></span>
+                                            <small>Magnitude 5-7</small>
+                                        </span>
+                                        <span class="legend-item me-3 mb-2">
+                                            <span class="legend-marker" style="background-color: #ff0000; width: 18px; height: 18px; display: inline-block; border-radius: 50%; margin-right: 5px; border: 1px solid #333;"></span>
+                                            <small>Magnitude 7+</small>
+                                        </span>
+                                        <small>💡When there's no data in the map, please click the magnitude choice button above to display</small>
+                                    </div>
+                                </div>
+                                <div class="col-md-4 text-end">
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="checkbox" id="clusterMarkers" checked>
+                                        <label class="form-check-label" for="clusterMarkers">
+                                            <small>Cluster Markers</small>
+                                        </label>
+                                    </div>
+                                    <div class="form-check form-check-inline">
+                                        <input class="form-check-input" type="checkbox" id="showHeatmap">
+                                        <label class="form-check-label" for="showHeatmap">
+                                            <small>Heat Map</small>
+                                        </label>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Performance Metrics -->
+        <div class="card mb-4" id="performanceCard" style="display: none;">
+            <div class="card-header">
+                <h5>⚡ Performance Metrics</h5>
+            </div>
+            <div class="card-body" id="performanceMetrics">
+            </div>
+        </div>
+
+        <!-- Charts Grid -->
+        <div class="row">
+            <!-- Magnitude Distribution Pie Chart -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>🥧 Magnitude Distribution</h5>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-primary" onclick="loadMagnitudeChart('pie')">Pie Chart</button>
+                            <button class="btn btn-outline-primary" onclick="loadMagnitudeChart('bar')">Bar Chart</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="magnitudeChart" width="400" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Depth Distribution -->
+            <div class="col-md-6 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>📏 Depth Distribution</h5>
+                        <button class="btn btn-primary btn-sm" onclick="loadDepthChart()">Load Chart</button>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="depthChart" width="400" height="300"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Magnitude vs Depth Scatter Plot -->
+            <div class="col-md-7 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>📈 Magnitude vs Depth (Recent 100 Earthquakes)</h5>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-primary" onclick="loadScatterChart(100)">100 Recent</button>
+                            <button class="btn btn-outline-primary" onclick="loadScatterChart(200)">200 Recent</button>
+                            <button class="btn btn-outline-primary" onclick="loadScatterChart(500)">500 Recent</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="scatterChart" width="600" height="400"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Hourly Distribution -->
+            <div class="col-md-5 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>🕐 Hourly Distribution</h5>
+                        <div class="btn-group btn-group-sm" role="group">
+                            <button class="btn btn-primary" onclick="loadHourlyChart()">All Earthquakes</button>
+                            <button class="btn btn-outline-primary" onclick="loadHourlyChartFiltered(4)">Magnitude 4+</button>
+                        </div>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="hourlyChart" width="450" height="400"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Top Locations -->
+            <div class="col-md-12 mb-4">
+                <div class="card">
+                    <div class="card-header">
+                        <h5>📌 Top 10 Earthquake Locations</h5>
+                        <button class="btn btn-primary btn-sm" onclick="loadTopLocationsChart()">Load Chart</button>
+                    </div>
+                    <div class="card-body">
+                        <canvas id="locationsChart" width="800" height="400"></canvas>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.1.3/dist/js/bootstrap.bundle.min.js"></script>
+    <!-- Leaflet plugins -->
+    <script src="https://unpkg.com/leaflet.markercluster@1.4.1/dist/leaflet.markercluster.js"></script>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.css" />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet.markercluster@1.4.1/dist/MarkerCluster.Default.css" />
+    
+    <script>
+        // Global variables for performance tracking
+        let performanceData = {};
+
+        // Color palettes
+        const colors = {
+            magnitude: ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4', '#FFEAA7', '#DDA0DD'],
+            depth: ['#FF9999', '#66B2FF', '#99FF99', '#FFCC99', '#FF99CC'],
+            locations: '#4ECDC4',
+            scatter: '#FF6B6B'
+        };
+
+        // Global variables for Leaflet map
+        let leafletMap = null;
+        let earthquakeMarkers = null;
+        let currentEarthquakeData = [];
+        let heatmapLayer = null;
+        let individualMarkers = []; // Track individual markers
+
+        // Initialize Leaflet map
+        function initializeLeafletMap() {
+            if (leafletMap) {
+                return; // Map already initialized
+            }
+
+            // Create map centered on world view
+            leafletMap = L.map('leafletMap').setView([20, 0], 2);
+
+            // Add tile layers with different map styles
+            const osmLayer = L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors',
+                maxZoom: 18
+            });
+
+            const satelliteLayer = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
+                attribution: '© Esri',
+                maxZoom: 18
+            });
+
+            const topoLayer = L.tileLayer('https://{s}.tile.opentopomap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenTopoMap contributors',
+                maxZoom: 17
+            });
+
+            // Add default layer
+            osmLayer.addTo(leafletMap);
+
+            // Layer control
+            const baseMaps = {
+                "Street Map": osmLayer,
+                "Satellite": satelliteLayer,
+                "Topographic": topoLayer
+            };
+
+            L.control.layers(baseMaps).addTo(leafletMap);
+
+            // Initialize marker cluster group
+            earthquakeMarkers = L.markerClusterGroup({
+                chunkedLoading: true,
+                maxClusterRadius: 50
+            });
+
+            console.log('✅ Leaflet map initialized');
+        }
+
+        function getEarthquakeMarkerStyle(magnitude) {
+            let color, size, opacity;
+            
+            if (magnitude >= 7) {
+                color = '#ff0000'; // Red
+                size = 12;
+                opacity = 0.9;
+            } else if (magnitude >= 5) {
+                color = '#ff8800'; // Orange
+                size = 10;
+                opacity = 0.8;
+            } else if (magnitude >= 3) {
+                color = '#ffff00'; // Yellow
+                size = 8;
+                opacity = 0.7;
+            } else {
+                color = '#00ff00'; // Green
+                size = 6;
+                opacity = 0.6;
+            }
+
+            return {
+                radius: size,
+                fillColor: color,
+                color: '#333',
+                weight: 1,
+                opacity: 1,
+                fillOpacity: opacity
+            };
+        }
+
+        function createEarthquakePopup(earthquake) {
+            const date = new Date(earthquake.time).toLocaleString();
+            return `
+                <div class="earthquake-popup">
+                    <h6><strong>Magnitude ${earthquake.magnitude}</strong></h6>
+                    <p><strong>Location:</strong> ${earthquake.place}</p>
+                    <p><strong>Time:</strong> ${date}</p>
+                    <p><strong>Depth:</strong> ${earthquake.depth} km</p>
+                    <p><strong>Coordinates:</strong> ${earthquake.latitude.toFixed(3)}, ${earthquake.longitude.toFixed(3)}</p>
+                </div>
+            `;
+        }
+
+               function createHeatmapLayer(earthquakes) {
+            // Remove existing heatmap
+            if (heatmapLayer) {
+                leafletMap.removeLayer(heatmapLayer);
+                heatmapLayer = null;
+            }
+
+            if (earthquakes.length === 0) {
+                console.log('No earthquake data for heatmap');
+                return;
+            }
+
+            // Prepare heatmap data in the format [lat, lng, intensity]
+            const heatmapData = earthquakes.map(eq => {
+                // Use magnitude as intensity, normalize it (0-1 scale)
+                const intensity = Math.min(eq.magnitude / 10, 1); // Cap at magnitude 10
+                return [eq.latitude, eq.longitude, intensity];
+            }).filter(point => 
+                point[0] && point[1] && 
+                !isNaN(point[0]) && !isNaN(point[1]) && 
+                point[0] >= -90 && point[0] <= 90 && 
+                point[1] >= -180 && point[1] <= 180
+            );
+
+            if (heatmapData.length === 0) {
+                console.log('No valid coordinates for heatmap');
+                return;
+            }
+
+            // Create heatmap layer with proper configuration
+            heatmapLayer = L.heatLayer(heatmapData, {
+                radius: 25,
+                blur: 15,
+                maxZoom: 18,
+                max: 1.0,
+                minOpacity: 0.4,
+                gradient: {
+                    0.0: 'blue',
+                    0.2: 'cyan',
+                    0.4: 'lime',
+                    0.6: 'yellow',
+                    0.8: 'orange',
+                    1.0: 'red'
+                }
+            });
+
+            // Add heatmap to map
+            heatmapLayer.addTo(leafletMap);
+            console.log(`✅ Heatmap created with ${heatmapData.length} points`);
+        }
+
+        function toggleHeatmap() {
+            const showHeatmap = document.getElementById('showHeatmap').checked;
+            
+            if (showHeatmap) {
+                if (currentEarthquakeData.length > 0) {
+                    createHeatmapLayer(currentEarthquakeData);
+                    // Hide individual markers when showing heatmap
+                    if (earthquakeMarkers && leafletMap.hasLayer(earthquakeMarkers)) {
+                        leafletMap.removeLayer(earthquakeMarkers);
+                    }
+                } else {
+                    console.log('No earthquake data available for heatmap');
+                    document.getElementById('showHeatmap').checked = false;
+                }
+            } else {
+                // Remove heatmap and show markers
+                if (heatmapLayer) {
+                    leafletMap.removeLayer(heatmapLayer);
+                    heatmapLayer = null;
+                }
+                // Show individual markers again
+                if (earthquakeMarkers && !leafletMap.hasLayer(earthquakeMarkers)) {
+                    leafletMap.addLayer(earthquakeMarkers);
+                }
+            }
+        }
+
+        function clearAllEarthquakeLayers() {
+            // Clear clustered markers
+            if (earthquakeMarkers) {
+                earthquakeMarkers.clearLayers();
+                if (leafletMap.hasLayer(earthquakeMarkers)) {
+                    leafletMap.removeLayer(earthquakeMarkers);
+                }
+            }
+            
+            // Clear individual markers using tracked array
+            individualMarkers.forEach(marker => {
+                if (leafletMap.hasLayer(marker)) {
+                    leafletMap.removeLayer(marker);
+                }
+            });
+            individualMarkers = [];
+            
+            // Clear heatmap layer
+            if (heatmapLayer) {
+                leafletMap.removeLayer(heatmapLayer);
+                heatmapLayer = null;
+            }
+        }
+
+        function addEarthquakeMarkers(earthquakes) {
+            // Clear existing markers first
+            clearAllEarthquakeLayers();
+            
+            const clusterEnabled = document.getElementById('clusterMarkers').checked;
+            const showHeatmap = document.getElementById('showHeatmap').checked;
+            
+            // If heatmap is enabled, don't show individual markers
+            if (showHeatmap) {
+                createHeatmapLayer(earthquakes);
+                return;
+            }
+            
+            earthquakes.forEach(earthquake => {
+                const lat = earthquake.latitude;
+                const lng = earthquake.longitude;
+                
+                // Skip invalid coordinates
+                if (!lat || !lng || isNaN(lat) || isNaN(lng)) {
+                    return;
+                }
+
+                const style = getEarthquakeMarkerStyle(earthquake.magnitude);
+                
+                // Create circle marker
+                const marker = L.circleMarker([lat, lng], style)
+                    .bindPopup(createEarthquakePopup(earthquake))
+                    .bindTooltip(`M${earthquake.magnitude} - ${earthquake.place}`, {
+                        permanent: false,
+                        direction: 'top'
+                    });
+
+                if (clusterEnabled) {
+                    earthquakeMarkers.addLayer(marker);
+                } else {
+                    // Add to individual markers array for tracking
+                    individualMarkers.push(marker);
+                    marker.addTo(leafletMap);
+                }
+            });
+
+            if (clusterEnabled && !showHeatmap) {
+                leafletMap.addLayer(earthquakeMarkers);
+            }
+        }
+
+        async function loadLeafletMap(minMagnitude = null) {
+            // Initialize map if not already done
+            initializeLeafletMap();
+
+            // Update button states
+            document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+            if (minMagnitude === null) {
+                document.getElementById('allMagBtn').classList.add('active');
+            } else if (minMagnitude === 5) {
+                document.getElementById('mag5Btn').classList.add('active');
+            } else if (minMagnitude === 7) {
+                document.getElementById('mag7Btn').classList.add('active');
+            }
+
+            const params = {};
+            if (minMagnitude !== null) {
+                params.min_magnitude = minMagnitude;
+            }
+            
+            const result = await fetchData('/api/earthquakes_map', params);
+            if (result && result.data) {
+                currentEarthquakeData = result.data;
+                
+                performanceData['Leaflet Earthquake Map'] = {
+                    execution_time: result.execution_time,
+                    cache_hit: result.cache_hit
+                };
+                
+                // Add markers or heatmap to map
+                addEarthquakeMarkers(result.data);
+                
+                // Update stats
+                const statsElement = document.getElementById('leafletMapStats');
+                const title = minMagnitude 
+                    ? `Magnitude ${minMagnitude}+`
+                    : 'All Magnitudes';
+                statsElement.innerHTML = `
+                    <strong>${title}:</strong> ${result.count} earthquakes | 
+                    <strong>Load time:</strong> ${result.execution_time}s | 
+                    <strong>Cache:</strong> ${result.cache_hit ? 'HIT' : 'MISS'}
+                `;
+                
+                showPerformanceMetrics();
+
+                // Fit map to show all markers if there are any
+                if (result.data.length > 0 && !document.getElementById('showHeatmap').checked) {
+                    const group = new L.featureGroup(earthquakeMarkers.getLayers());
+                    if (group.getBounds().isValid()) {
+                        leafletMap.fitBounds(group.getBounds(), { padding: [20, 20] });
+                    }
+                }
+            }
+        }
+
+        function clearEarthquakeMarkers() {
+            // Clear all earthquake-related layers
+            clearAllEarthquakeLayers();
+            
+            // Clear current data
+            currentEarthquakeData = [];
+            
+            // Reset checkboxes to default state
+            document.getElementById('showHeatmap').checked = false;
+            document.getElementById('clusterMarkers').checked = true;
+            
+            // Reset button states
+            document.querySelectorAll('.btn-group .btn').forEach(btn => btn.classList.remove('active'));
+            
+            // Clear stats
+            document.getElementById('leafletMapStats').textContent = 'All earthquake layers cleared';
+            
+            // Clear performance data for map
+            if (performanceData['Leaflet Earthquake Map']) {
+                delete performanceData['Leaflet Earthquake Map'];
+                showPerformanceMetrics();
+            }
+            
+            console.log('✅ All earthquake layers and data cleared');
+        }
+
+        // Event listeners for map controls
+        document.getElementById('clusterMarkers').addEventListener('change', function() {
+            if (currentEarthquakeData.length > 0) {
+                addEarthquakeMarkers(currentEarthquakeData);
+            }
+        });
+
+        document.getElementById('showHeatmap').addEventListener('change', function() {
+            toggleHeatmap();
+        });
+
+        // Update the refreshAllCharts function to include Leaflet map
+        function refreshAllCharts() {
+            loadMagnitudeChart('pie');
+            loadDepthChart();
+            loadScatterChart(100);
+            loadHourlyChart();
+            loadTopLocationsChart();
+            loadLeafletMap(); // Load Leaflet map
+        }
+
+        // Update the window load event
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                loadMagnitudeChart('pie');
+                loadScatterChart(100);
+                initializeLeafletMap(); // Initialize Leaflet map
+                loadLeafletMap(); // Load earthquake data
+            }, 500);
+        });
+
+        // Add to the refreshAllCharts function
+        function refreshAllCharts() {
+            loadMagnitudeChart('pie');
+            loadDepthChart();
+            loadScatterChart(100);
+            loadHourlyChart();
+            loadTopLocationsChart();
+            loadEarthquakeMap(); // Add this line
+        }
+
+        // Update the window load event
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                loadMagnitudeChart('pie');
+                loadScatterChart(100);
+                loadEarthquakeMap(); // Add this line
+            }, 500);
+        });
+
+
+        function showPerformanceMetrics() {
+            const card = document.getElementById('performanceCard');
+            const metricsDiv = document.getElementById('performanceMetrics');
+            
+            let html = '<div class="row">';
+            Object.keys(performanceData).forEach(chart => {
+                const data = performanceData[chart];
+                html += `
+                    <div class="col-md-4">
+                        <strong>${chart}:</strong><br>
+                        Time: ${data.execution_time}s<br>
+                        Cache: ${data.cache_hit ? 'HIT' : 'MISS'}
+                    </div>
+                `;
+            });
+            html += '</div>';
+            
+            metricsDiv.innerHTML = html;
+            card.style.display = 'block';
+        }
+
+        async function fetchData(endpoint, params = {}) {
+            const useRedis = document.getElementById('useRedisCache').checked;
+            const urlParams = new URLSearchParams({
+                use_redis: useRedis,
+                ...params
+            });
+            
+            try {
+                const response = await fetch(`${endpoint}?${urlParams}`);
+                const result = await response.json();
+                return result;
+            } catch (error) {
+                console.error('Error fetching data:', error);
+                return null;
+            }
+        }
+
+        function drawPieChart(canvas, data, title) {
+            const ctx = canvas.getContext('2d');
+            const centerX = canvas.width / 2;
+            const centerY = canvas.height / 2;
+            const radius = Math.min(centerX, centerY) - 50;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            // Calculate total and angles
+            const total = Object.values(data).reduce((sum, val) => sum + val, 0);
+            let currentAngle = -Math.PI / 2;
+            
+            // Draw pie slices
+            Object.entries(data).forEach(([label, value], index) => {
+                const sliceAngle = (value / total) * 2 * Math.PI;
+                
+                // Draw slice
+                ctx.beginPath();
+                ctx.moveTo(centerX, centerY);
+                ctx.arc(centerX, centerY, radius, currentAngle, currentAngle + sliceAngle);
+                ctx.closePath();
+                ctx.fillStyle = colors.magnitude[index % colors.magnitude.length];
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 2;
+                ctx.stroke();
+                
+                // Draw label
+                const labelAngle = currentAngle + sliceAngle / 2;
+                const labelX = centerX + Math.cos(labelAngle) * (radius + 30);
+                const labelY = centerY + Math.sin(labelAngle) * (radius + 30);
+                
+                ctx.fillStyle = '#333';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(`${label}: ${value}`, labelX, labelY);
+                
+                currentAngle += sliceAngle;
+            });
+            
+            // Draw title
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(title, centerX, 20);
+        }
+
+        function drawBarChart(canvas, data, title) {
+            const ctx = canvas.getContext('2d');
+            const margin = 40;
+            const chartWidth = canvas.width - 2 * margin;
+            const chartHeight = canvas.height - 2 * margin;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Define correct order for depth distribution specifically
+            let entries;
+            if (title.includes('Depth Distribution')) {
+                // Force correct order for depth data
+                const correctOrder = ['0-10km', '10-50km', '50-100km', '100-300km', '300km+'];
+                entries = correctOrder.map(key => [key, data[key] || 0]).filter(([key, value]) => data.hasOwnProperty(key));
+            } else {
+                // Use original order for other charts
+                entries = Object.entries(data);
+            }
+    
+            // const entries = Object.entries(data);
+            const maxValue = Math.max(...Object.values(data));
+            const barWidth = chartWidth / entries.length - 10;
+            
+            entries.forEach(([label, value], index) => {
+                const barHeight = (value / maxValue) * chartHeight;
+                const x = margin + index * (barWidth + 10);
+                const y = canvas.height - margin - barHeight;
+                
+                // Draw bar
+                ctx.fillStyle = colors.magnitude[index % colors.magnitude.length];
+                ctx.fillRect(x, y, barWidth, barHeight);
+                
+                // Draw value on top of bar
+                ctx.fillStyle = '#333';
+                ctx.font = '12px Arial';
+                ctx.textAlign = 'center';
+                ctx.fillText(value.toString(), x + barWidth/2, y - 5);
+                
+                // Draw label
+                ctx.save();
+                ctx.translate(x + barWidth/2, canvas.height - 10);
+                //ctx.rotate(-Math.PI/4);
+                ctx.textAlign = 'center';
+                ctx.fillText(label, 0, 0);
+                ctx.restore();
+            });
+            
+            // Draw title
+            ctx.fillStyle = '#333';
+            ctx.font = 'bold 16px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText(title, canvas.width/2, 20);
+        }
+
+        function drawScatterPlot(canvas, data, title) {
+            const ctx = canvas.getContext('2d');
+            const margin = 60;
+            const chartWidth = canvas.width - 2 * margin;
+            const chartHeight = canvas.height - 2 * margin;
+            
+            // Clear canvas
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            
+            if (data.length === 0) return;
+            
+            // Find min/max values
+            const magnitudes = data.map(d => d.magnitude);
+            const depths = data.map(d => d.depth);
+            const minMag = Math.min(...magnitudes);
+            const maxMag = Math.max(...magnitudes);
+            const minDepth = Math.min(...depths);
+            const maxDepth = Math.max(...depths);
+            
+            // Draw axes
+            ctx.strokeStyle = '#333';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(margin, margin);
+            ctx.lineTo(margin, canvas.height - margin);
+            ctx.lineTo(canvas.width - margin, canvas.height - margin);
+            ctx.stroke();
+            
+            // Draw points
+            data.forEach(point => {
+                const x = margin + ((point.magnitude - minMag) / (maxMag - minMag)) * chartWidth;
+                const y = canvas.height - margin - ((point.depth - minDepth) / (maxDepth - minDepth)) * chartHeight;
+                
+                ctx.beginPath();
+                ctx.arc(x, y, 3, 0, 2 * Math.PI);
+                ctx.fillStyle = colors.scatter;
+                ctx.fill();
+                ctx.strokeStyle = '#fff';
+                ctx.lineWidth = 1;
+                ctx.stroke();
+            });
+            
+            // Draw labels
+            ctx.fillStyle = '#333';
+            ctx.font = '12px Arial';
+            ctx.textAlign = 'center';
+            ctx.fillText('Magnitude', canvas.width/2, canvas.height - 10);
+            
+            ctx.save();
+            ctx.translate(15, canvas.height/2);
+            ctx.rotate(-Math.PI/2);
+            ctx.fillText('Depth (km)', 0, 0);
+            ctx.restore();
+            
+            // Draw title
+            ctx.font = 'bold 16px Arial';
+            ctx.fillText(title, canvas.width/2, 20);
+        }
+
+        async function loadMagnitudeChart(type = 'pie') {
+            const result = await fetchData('/api/magnitude_distribution');
+            if (result && result.data) {
+                performanceData['Magnitude Distribution'] = {
+                    execution_time: result.execution_time,
+                    cache_hit: result.cache_hit
+                };
+                
+                const canvas = document.getElementById('magnitudeChart');
+                if (type === 'pie') {
+                    drawPieChart(canvas, result.data, '');
+                } else {
+                    drawBarChart(canvas, result.data, 'Earthquake Magnitude Distribution');
+                }
+                showPerformanceMetrics();
+            }
+        }
+
+        async function loadDepthChart() {
+            const result = await fetchData('/api/depth_distribution');
+            if (result && result.data) {
+                performanceData['Depth Distribution'] = {
+                    execution_time: result.execution_time,
+                    cache_hit: result.cache_hit
+                };
+                
+                const canvas = document.getElementById('depthChart');
+                drawBarChart(canvas, result.data, 'Earthquake Depth Distribution');
+                showPerformanceMetrics();
+            }
+        }
+
+        async function loadScatterChart(limit = 100) {
+            const result = await fetchData('/api/magnitude_depth_scatter', { limit });
+            if (result && result.data) {
+                performanceData['Magnitude vs Depth'] = {
+                    execution_time: result.execution_time,
+                    cache_hit: result.cache_hit
+                };
+                
+                const canvas = document.getElementById('scatterChart');
+                drawScatterPlot(canvas, result.data, `Magnitude vs Depth (${limit} Recent Earthquakes)`);
+                showPerformanceMetrics();
+            }
+        }
+
+        async function loadHourlyChart() {
+            const result = await fetchData('/api/hourly_distribution');
+            if (result && result.data) {
+                performanceData['Hourly Distribution'] = {
+                    execution_time: result.execution_time,
+                    cache_hit: result.cache_hit
+                };
+                
+                const canvas = document.getElementById('hourlyChart');
+                drawBarChart(canvas, result.data, 'Earthquakes by Hour (All)');
+                showPerformanceMetrics();
+            }
+        }
+
+        async function loadHourlyChartFiltered(minMagnitude = 4) {
+            const result = await fetchData('/api/hourly_distribution_filtered', { min_magnitude: minMagnitude });
+            if (result && result.data) {
+                performanceData['Hourly Distribution (Mag 4+)'] = {
+                    execution_time: result.execution_time,
+                    cache_hit: result.cache_hit
+                };
+                const canvas = document.getElementById('hourlyChart');
+                drawBarChart(canvas, result.data, `Earthquakes by Hour (Mag ${minMagnitude}+)`);
+                showPerformanceMetrics();
+            }
+        }
+
+        async function loadTopLocationsChart() {
+            const result = await fetchData('/api/top_locations');
+            if (result && result.data) {
+                performanceData['Top Locations'] = {
+                    execution_time: result.execution_time,
+                    cache_hit: result.cache_hit
+                };
+                
+                const canvas = document.getElementById('locationsChart');
+                const data = {};
+                result.data.forEach(item => {
+                    data[item.location] = item.count;
+                });
+                drawBarChart(canvas, data, 'Top 10 Earthquake Locations');
+                showPerformanceMetrics();
+            }
+        }
+
+        function refreshAllCharts() {
+            loadMagnitudeChart('pie');
+            loadDepthChart();
+            loadScatterChart(100);
+            loadHourlyChart();
+            loadTopLocationsChart();
+        }
+
+        // Load initial charts when page loads
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                loadMagnitudeChart('pie');
+                loadScatterChart(100);
+            }, 500);
+        });
+    </script>
+</body>
+</html>
